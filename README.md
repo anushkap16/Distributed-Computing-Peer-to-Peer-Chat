@@ -1,4 +1,4 @@
-# Decentralized Chat
+# Decentralized Peer-to-Peer Chat Application
 
 A serverless, peer-to-peer chat application. Every running instance is both a server (listening for connections) and a client (initiating connections), so there is no central server that can fail, be overloaded, or store your messages. Messages are ordered consistently across all peers using **Lamport logical clocks**.
 
