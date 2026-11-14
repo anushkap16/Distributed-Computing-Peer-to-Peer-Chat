@@ -1,0 +1,16 @@
+<!DOCTYPE html> <!-- This creates the login interface -->
+<html>
+<head>
+    <title>Login</title>
+    <script src="https://cdn.tailwindcss.com"></script> <!-- Make the UI responsive and visually appealing -->
+</head>
+<body class="bg-slate-900 h-screen flex items-center justify-center"> <!-- Create a full-screen background with a centered content area -->
+    <div class="bg-white p-10 rounded-3xl shadow-2xl w-96">
+        <h2 class="text-3xl font-bold text-center mb-6">Welcome</h2>
+        <form action="/login" method="POST" class="space-y-4">
+            <input type="text" name="username" placeholder="Pick a username" class="w-full p-4 bg-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500" required>
+            <button type="submit" class="w-full bg-indigo-600 text-white p-4 rounded-2xl font-bold shadow-lg">Start Chatting</button>
+        </form>
+    </div>
+</body>
+</html>

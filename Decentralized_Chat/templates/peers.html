@@ -1,0 +1,30 @@
+<!DOCTYPE html> <!-- This is the peers interface -->
+<html>
+<head>
+    <title>Peers</title>
+    <link rel="stylesheet" href="/static/style.css"> <!-- Create a simple stylesheet for the peers interface -->
+</head>
+<body>
+    <h2>Add Peer</h2>
+
+    <form method="POST" action="/add_peer"> <!-- This makes it possible to add a new peer -->
+        IP: <input type="text" name="ip" required>
+        Port: <input type="text" name="port" required>
+        <button type="submit">Add</button>
+    </form>
+
+    <h3>Saved Peers</h3> <!-- This creates a list of saved peers -->
+    <ul>
+        {% for peer in peers %} <!-- Creates a list item for each saved peer -->
+        <li>
+            {{ peer.ip }} : {{ peer.port }} <!-- Makes the IP and port visible -->
+            <form method="POST" action="/connect" style="display:inline;">
+                <input type="hidden" name="ip" value="{{ peer.ip }}">
+                <input type="hidden" name="port" value="{{ peer.port }}">
+                <button type="submit">Connect</button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

@@ -1,0 +1,260 @@
+<!DOCTYPE html> <!-- This creates the chat interface -->
+<html>
+<head>
+    <title>Chat Node {{ p2p }}</title> 
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
+        
+        /* Custom Tooltip Container */
+        .tooltip-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        /* Tooltip positioned BELOW the emoji to prevent cutoff at top of screen */
+        .tooltip-text {
+            visibility: hidden;
+            width: auto;
+            background-color: #1e293b; /* slate-800 */
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 4px 8px;
+            position: absolute;
+            z-index: 99;
+            top: 130%; 
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 10px;
+            white-space: nowrap;
+            pointer-events: none;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        .tooltip-container:hover .tooltip-text { 
+            visibility: visible;
+            opacity: 1;
+        }
+
+        #chat-box { scroll-behavior: smooth; }
+    </style>
+</head> 
+<body class="bg-slate-900 h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-5xl h-[85vh] flex rounded-3xl overflow-hidden shadow-2xl"> <!-- This creates the main chat container -->
+        <div class="w-80 bg-slate-800 text-white p-6 flex flex-col">
+            <h2 class="text-2xl font-bold mb-6 text-indigo-400">Decentralized Chat</h2>
+            
+            <div class="space-y-4 flex-grow overflow-y-auto pr-2"> <!-- This creates the sidebar for peer connections and settings -->
+                <div class="bg-slate-700/50 p-4 rounded-2xl">
+                    <p class="text-xs text-slate-400 font-bold uppercase">Your Port</p>
+                    <p class="text-xl font-mono">{{ p2p }}</p>
+                </div>
+                
+                <div class="space-y-2"> <!-- This creates the input fields for connecting to a peer -->
+                    <p class="text-xs text-slate-400 font-bold uppercase">Connect to Peer</p>
+                    <input id="p-ip" type="text" placeholder="127.0.0.1" class="w-full bg-slate-900 p-3 rounded-xl text-sm outline-none border border-slate-700 focus:border-indigo-500">
+                    <input id="p-port" type="text" placeholder="Port (e.g. 6001)" class="w-full bg-slate-900 p-3 rounded-xl text-sm outline-none border border-slate-700 focus:border-indigo-500">
+                    <button onclick="linkPeer()" class="w-full bg-indigo-600 hover:bg-indigo-500 p-3 rounded-xl font-bold transition">Connect</button>
+                </div>
+
+                <div class="mt-6 pt-6 border-t border-slate-700"> <!-- Creates the list of connected peers -->
+                    <p class="text-xs text-slate-400 font-bold uppercase mb-3">Connected Peers</p>
+                    <div id="peer-list" class="space-y-2">
+                        </div>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-slate-700"> <!-- Creates the settings section -->
+                    <p class="text-xs text-slate-400 font-bold uppercase mb-2">Settings</p>
+                    <div class="flex flex-col gap-2">
+                        <input id="new-username" type="text" placeholder="New name..." class="w-full bg-slate-900 p-2 rounded-lg text-xs outline-none border border-slate-700 focus:border-indigo-500">
+                        <button onclick="changeName()" class="bg-slate-600 hover:bg-slate-500 py-2 rounded-lg text-xs font-bold transition">Update Username</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="pt-4 border-t border-slate-700"> <!-- Makes the user status visible -->
+                <p class="text-sm font-medium">{{ username }}</p>
+                <p class="text-[10px] text-green-500 uppercase">Status: Online</p>
+            </div>
+        </div>
+
+        <div class="flex-grow bg-white flex flex-col relative"> <!-- This creates the main chat area -->
+            <div id="chat-box" class="flex-grow p-6 overflow-y-auto space-y-4 bg-slate-50"></div>
+
+            <div id="reply-preview" class="hidden px-6 py-2 bg-slate-200 border-t flex justify-between items-center text-xs"> <!-- This creates the reply preview section -->
+                <div class="truncate mr-4">
+                    <span class="font-bold text-indigo-600">Replying to: </span>
+                    <span id="reply-preview-text" class="italic text-slate-600"></span>
+                </div>
+                <button onclick="cancelReply()" class="text-slate-500 hover:text-red-500 font-bold text-lg">&times;</button>
+            </div>
+
+            <div class="p-4 bg-white border-t"> <!-- This creates the message input section -->
+                <form id="msg-form" class="flex gap-2">
+                    <input type="hidden" id="reply-sig" value="">
+                    <input id="msg-input" type="text" placeholder="Type a message..." class="flex-grow bg-slate-100 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500" autocomplete="off">
+                    <button type="submit" class="bg-indigo-600 text-white px-6 rounded-2xl font-bold hover:bg-indigo-500 transition">Send</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let lastMessagesJSON = ""; // Transform the messages into a JSON string to easily compare if there are changes and only re-render if necessary
+        
+        async function linkPeer() { // This function is called when the user clicks the "Connect" button to connect to a new peer
+            const ip = document.getElementById('p-ip').value || "127.0.0.1"; 
+            const port = document.getElementById('p-port').value;
+            if(!port) return;
+            const res = await fetch('/connect', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: `ip=${ip}&port=${port}`
+            });
+            const data = await res.json();
+            if (data.status !== "success") {
+                alert(data.message || "Connection failed");
+            }
+        }
+
+        async function changeName() { // This function is called when the user clicks the "Update Username" button to change their display name
+            const newName = document.getElementById('new-username').value;
+            if(!newName) return;
+            await fetch('/change_username', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: `new_username=${encodeURIComponent(newName)}`
+            });
+            location.reload();
+        }
+
+        function setReply(sig, sender, text) { // This function is called when the user clicks the "Reply" button on a message to set up the reply preview and store the signature of the message being replied to
+            document.getElementById('reply-sig').value = sig;
+            document.getElementById('reply-preview-text').innerText = `${sender}: ${text}`;
+            document.getElementById('reply-preview').classList.remove('hidden');
+            document.getElementById('msg-input').focus();
+        }
+
+        function cancelReply() { // This function is called when the user clicks the "X" button on the reply preview to cancel the reply action
+            document.getElementById('reply-sig').value = "";
+            document.getElementById('reply-preview').classList.add('hidden');
+        }
+
+        async function addReaction(sig, emoji) { // This function is called when the user clicks a reaction button on a message to add a reaction. If the "+" button is clicked, it prompts the user to enter a custom emoji.
+            if (emoji === '+') {
+                emoji = prompt("Enter an emoji:");
+                if (!emoji) return;
+            }
+            await fetch('/react', { // Send the reaction to the server with the message signature and the chosen emoji
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: `sig=${encodeURIComponent(sig)}&emoji=${encodeURIComponent(emoji)}`
+            });
+        }
+
+        document.getElementById('msg-form').onsubmit = async (e) => { // This function is called when the user submits the message form to send a new message. It sends the message content and the signature of the message being replied to (if any) to the server.
+            e.preventDefault();
+            const input = document.getElementById('msg-input');
+            const replySig = document.getElementById('reply-sig').value;
+            if(!input.value) return;
+
+            await fetch('/send', { // Send the new message to the server with the message content and optional reply signature
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: `message=${encodeURIComponent(input.value)}&reply_to=${encodeURIComponent(replySig)}`
+            });
+            input.value = "";
+            cancelReply();
+        };
+
+        async function refresh() { // This function is called every second to refresh the chat messages and the list of connected peers. It fetches the latest messages and peer information from the server and updates the UI accordingly.
+            const res = await fetch('/messages');
+            const data = await res.json();
+            
+            // Sidebar Peer Display
+            const peerListDiv = document.getElementById('peer-list');
+            if (data.active_peers) {
+                peerListDiv.innerHTML = data.active_peers.map(p => `
+                    <div class="bg-slate-900/50 p-2 rounded-xl border border-slate-700 flex items-center gap-2 text-[11px] font-mono">
+                        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> ${p}
+                    </div>
+                `).join('');
+            }
+
+            const currentDataStr = JSON.stringify(data.messages); // Convert messages to JSON string for easy comparison
+            if (currentDataStr !== lastMessagesJSON) { // Only re-render the chat messages if there has been a change to prevent unnecessary DOM updates and preserve scroll position when not needed
+                const chatBox = document.getElementById('chat-box');
+                const shouldScroll = chatBox.scrollTop + chatBox.clientHeight >= chatBox.scrollHeight - 100;
+                chatBox.innerHTML = "";
+
+                data.messages.forEach(m => { // Loop through each message and render it in the chat area
+                    // Render System Notifications (Name changes)
+                    if (m.type === "system") { // If the message is a system notification (e.g. username change), render it as a centered notification bubble
+                        chatBox.innerHTML += `
+                            <div class="flex justify-center my-4">
+                                <span class="bg-slate-200 text-slate-600 px-4 py-1 rounded-full text-[10px] font-bold shadow-sm border border-slate-300">
+                                    ${m.message}
+                                </span>
+                            </div>`;
+                        return;
+                    }
+
+                    // Render Chat Bubbles
+                    const isMine = m.sender === "{{ username }}";
+                    const displayTime = m.time ? new Date(m.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : "";
+                    
+                    let replyHtml = "";
+                    if (m.reply_to) { // If the message is a reply, find the parent message and render a preview of it above the message content. If the parent message has been deleted, show "Message deleted" instead.
+                        const parent = data.messages.find(msg => msg.sig === m.reply_to);
+                        replyHtml = `
+                            <div class="text-[10px] bg-black/5 p-2 mb-1 rounded border-l-2 border-indigo-400 italic opacity-80">
+                                <strong>${parent ? parent.sender : 'Unknown'}</strong>: ${parent ? parent.message : 'Message deleted'}
+                            </div>`;
+                    }
+
+                    let reactionsHtml = "";
+                    if (m.reactions) { // If the message has reactions, render them below the message content. Each reaction shows the emoji and a tooltip with the usernames of the reactors.
+                        Object.entries(m.reactions).forEach(([user, emo]) => {
+                            reactionsHtml += `
+                            <div class="tooltip-container ml-1 mb-1">
+                                <span class="inline-block bg-white rounded-full px-1.5 py-0.5 text-xs border shadow-sm cursor-default hover:bg-slate-100">${emo}</span>
+                                <span class="tooltip-text">Reacted by: ${user}</span>
+                            </div>`;
+                        });
+                    }
+                    
+                    // Render the chat bubble with the message content, sender, time, reactions, and action buttons (Reply and Reactions). The bubble is aligned to the right if it's the user's own message and to the left if it's from another user.
+                    chatBox.innerHTML += `
+                        <div class="flex ${isMine ? 'justify-end' : 'justify-start'} mb-4 group">
+                            <div class="relative max-w-md">
+                                <div class="${isMine ? 'bg-indigo-600 text-white rounded-l-2xl rounded-tr-2xl' : 'bg-white border rounded-r-2xl rounded-tl-2xl'} p-3 shadow-md">
+                                    ${replyHtml}
+                                    <p class="text-[10px] font-bold opacity-70 mb-1">${m.sender} ${displayTime ? '• '+displayTime : ''}</p>
+                                    <p class="text-sm">${m.message}</p>
+                                    
+                                    <div class="absolute top-0 ${isMine ? '-left-36' : '-right-36'} flex gap-1 bg-white/90 backdrop-blur p-1 rounded-lg border shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                        <button onclick="addReaction('${m.sig}', '❤️')" class="hover:scale-125 transition">❤️</button>
+                                        <button onclick="addReaction('${m.sig}', '👍')" class="hover:scale-125 transition">👍</button>
+                                        <button onclick="addReaction('${m.sig}', '😭')" class="hover:scale-125 transition">😭</button>
+                                        <button onclick="addReaction('${m.sig}', '😂')" class="hover:scale-125 transition">😂</button>
+                                        <button onclick="addReaction('${m.sig}', '+')" class="hover:scale-125 transition">➕</button>
+                                        <div class="w-px bg-slate-200 mx-1"></div>
+                                        <button onclick="setReply('${m.sig}', '${m.sender}', '${m.message.replace(/'/g, "\\'")}')" class="text-[10px] text-indigo-600 font-bold hover:underline">Reply</button>
+                                    </div>
+                                </div>
+                                <div class="flex flex-wrap mt-1">${reactionsHtml}</div>
+                            </div>
+                        </div>`;
+                });
+                if (shouldScroll) chatBox.scrollTop = chatBox.scrollHeight;
+                lastMessagesJSON = currentDataStr;
+            }
+        }
+        setInterval(refresh, 1000);
+    </script>
+</body>
+</html>
